@@ -1,4 +1,4 @@
-#BOThttps://medium.com/swlh/tutorial-web-scraping-instagrams-most-precious-resource-corgis-235bf0389b0c
+#BOT
 from InstaParser import InstaParser
 from WebScrapping import WebScrapping
 
