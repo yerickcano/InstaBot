@@ -1,51 +1,44 @@
-#WebScraping
-"""
-from urllib.request import urlopen
-import requests
-"""
-import pandas as pd
-import time
-
 from selenium import webdriver
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from bs4 import BeautifulSoup as bs
+import time
+import re
+from urllib.request import urlopen
+import json
+from pandas.io.json import json_normalize
+import pandas as pd, numpy as np
 
-cap = DesiredCapabilities().FIREFOX
-cap["marionette"] = False
-browser = webdriver.Firefox(capabilities=cap)
-browser.get('http://seleniumhq.org/')
-
-"""
-def recent_25_posts(username):
-    #With the input of an account page, scrape the 25 most recent posts urls
-    url = "https://www.instagram.com/" + username + "/"
-    browser = Firefox()
-    browser.get(url)
-    post = 'https://www.instagram.com/p/'
-    post_links = []
-    while len(post_links) < 25:
-        links = [a.get_attribute('href') for a in browser.find_elements_by_tag_name('a')]
-        for link in links:
-            if post in link and link not in post_links:
-                post_links.append(link)
-        scroll_down = "window.scrollTo(0, document.body.scrollHeight);"
-        browser.execute_script(scroll_down)
-        time.sleep(10)
-    else:
-        return post_links[:25]
-
-recent_25_posts('space')
-
-
-class WebScrapping:
+hashtag='space'
+browser = webdriver.Chrome()
+browser.get('https://www.instagram.com/explore/tags/'+hashtag)
+Pagelength = browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+ 
+#Extract links from hashtag page
+links=[]
+source = browser.page_source
+data=bs(source, 'html.parser')
+body = data.find('body')
+script = body.find('script', text=lambda t: t.startswith('window._sharedData'))
+page_json = script.text.split(' = ', 1)[1].rstrip(';')
+data = json.loads(page_json)
+for link in data['entry_data']['TagPage'][0]['graphql']['hashtag']['edge_hashtag_to_media']['edges']:
+    links.append('https://www.instagram.com'+'/p/'+link['node']['shortcode']+'/')
     
-    def __init__(self):
-        self.version = 'version_01'    # instance variable unique to each instance
-
-    def get_data_from_tag(self, tag):  
-        headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:66.0) Gecko/20100101 Firefox/66.0", "Accept-Encoding":"gzip, deflate", "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "DNT":"1","Connection":"close", "Upgrade-Insecure-Requests":"1"}
-
-        r = requests.get('https://www.instagram.com/explore/tags/spacex/', headers=headers)#, proxies=proxies)
-        content = r.content
-        return content
-       """
-
+result=pd.DataFrame()
+for i in range(len(links)):
+    try:
+        page = urlopen(links[i]).read()
+        data=bs(page, 'html.parser')
+        body = data.find('body')
+        script = body.find('script')
+        raw = script.text.strip().replace('window._sharedData =', '').replace(';', '')
+        json_data=json.loads(raw)
+        posts =json_data['entry_data']['PostPage'][0]['graphql']
+        posts= json.dumps(posts)
+        posts = json.loads(posts)
+        x = pd.DataFrame.from_dict(json_normalize(posts), orient='columns') 
+        x.columns = x.columns.str.replace("shortcode_media.", "")
+        result=result.append(x)
+    except:
+        np.nan
+result = result.drop_duplicates(subset = 'shortcode')
+result.index = range(len(result.index))
